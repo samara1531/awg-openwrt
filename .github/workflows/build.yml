@@ -11,16 +11,16 @@ jobs:
     strategy:
       matrix:
         build_env:
-          - tag: "v24.10.0-rc4"
+          - tag: "rockchip-6.6"
             pkgarch: aarch64_generic
             target: rockchip
             subtarget: armv8
-            vermagic: "168af7c1c71e745443f872ddb987463a"
+            vermagic: "c97eaad335af218263fa9e5b4e7c56ae"
 
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: openwrt/openwrt
+          repository: mj22226/openwrt
           ref: ${{ matrix.build_env.tag }}
           fetch-depth: 0
 
@@ -34,16 +34,19 @@ jobs:
           key: ${{ runner.os }}-build-vm4-${{ env.cache-name }}
           restore-keys: |
             ${{ runner.os }}-build-vm4-cache-tools-kernel-${{ matrix.build_env.tag }}-${{ matrix.build_env.pkgarch}}-
+            
       - name: Building kernel and tools
         #if: ${{ steps.cache-tools-kernel.outputs.cache-hit != 'true' }}
         run: |
           echo "pkgarch: ${{ matrix.build_env.pkgarch}}, target:${{ matrix.build_env.target}}, subtarget: ${{ matrix.build_env.subtarget}}"
+          
           # Setup & install feeds
-          wget https://downloads.openwrt.org/releases/24.10.0-rc4/targets/rockchip/armv8/feeds.buildinfo -O feeds.conf
-          echo "src-git awgopenwrt https://github.com/yury-sannikov/awg-openwrt.git" >> ./feeds.conf
+          wget https://github.com/mj22226/openwrt/releases/download/rockchip-6.6/feeds.buildinfo -O feeds.conf
+          echo "src-git awgopenwrt https://github.com/samara1532/amneziawg-Rockchip.git" >> ./feeds.conf
           ./scripts/feeds update && ./scripts/feeds install -a
+          
           # Setup config with AWG and dependencies
-          wget https://downloads.openwrt.org/releases/24.10.0-rc4/targets/rockchip/armv8/config.buildinfo -O .config
+          wget https://github.com/mj22226/openwrt/releases/download/rockchip-6.6/config.buildinfo -O .config
           echo "CONFIG_PACKAGE_kmod-amneziawg=m" >> .config
           echo "CONFIG_PACKAGE_amneziawg-tools=y" >> .config
           echo "CONFIG_PACKAGE_luci-app-amneziawg=y" >> .config
@@ -66,6 +69,7 @@ jobs:
             echo Vermagic mismatch: $VERMAGIC, expected $VERMAGIC_EXPECTED
             exit 1
           fi
+          
       - name: Build AmneziaWG
         run: |
           VERMAGIC=`cat ./build_dir/target-*/linux-*/linux-*/.vermagic`
@@ -82,15 +86,16 @@ jobs:
           make package/luci-app-amneziawg/compile V=s
           make V=s package/amneziawg-tools/{clean,download,prepare}
           make V=s package/amneziawg-tools/compile
+          
       - name: Prepare artifacts
         run: |
           tag_name=${{  github.ref_name }}
           mkdir -p awgrelease
           postfix="${tag_name}_v${{ matrix.build_env.tag }}_${{ matrix.build_env.pkgarch}}_${{ matrix.build_env.target}}_${{ matrix.build_env.subtarget}}"
-          cp bin/packages/${{ matrix.build_env.pkgarch }}/awgopenwrt/amneziawg-tools_*.ipk awgrelease/amneziawg-tools_${postfix}.ipk
-          cp bin/packages/${{ matrix.build_env.pkgarch }}/awgopenwrt/luci-app-amneziawg_*.ipk awgrelease/luci-app-amneziawg_${postfix}.ipk
-          cp bin/targets/${{ matrix.build_env.target}}/${{ matrix.build_env.subtarget}}/packages/kmod-amneziawg_*.ipk awgrelease/kmod-amneziawg_${postfix}.ipk
+          cp bin/packages/${{ matrix.build_env.pkgarch }}/awgopenwrt/amneziawg-tools-*.apk awgrelease/amneziawg-tools_${postfix}.apk
+          cp bin/packages/${{ matrix.build_env.pkgarch }}/awgopenwrt/luci-app-amneziawg-*.apk awgrelease/luci-app-amneziawg_${postfix}.apk
+          cp bin/targets/${{ matrix.build_env.target}}/${{ matrix.build_env.subtarget}}/packages/kmod-amneziawg-*.apk awgrelease/kmod-amneziawg_${postfix}.apk
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          files: awgrelease/*.ipk
+          files: awgrelease/*.apk
